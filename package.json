@@ -1,0 +1,44 @@
+{
+  "name": "az-workbook",
+  "version": "0.1.0",
+  "description": "Local CLI to preview Azure Workbook JSON files in the browser with live reload. Uses your local 'az' CLI for auth. Unofficial.",
+  "bin": {
+    "az-workbook": "./src/cli.js"
+  },
+  "main": "./src/cli.js",
+  "type": "module",
+  "files": [
+    "src/cli.js",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "node scripts/build.js --watch",
+    "start": "npm run build && node src/cli.js",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.0",
+    "chartjs-adapter-date-fns": "^3.0.0",
+    "date-fns": "^3.0.0",
+    "marked": "^12.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0"
+  },
+  "keywords": [
+    "azure",
+    "workbook",
+    "monitor",
+    "visualizer",
+    "kusto",
+    "kql",
+    "cli"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Azure Workbook Visualizer</title>
+  <style>
+    :root {
+      --bg: #1e1e1e; --surface: #252526; --border: #3c3c3c;
+      --text: #cccccc; --text-muted: #888; --accent: #0078d4;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    button { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+    .config-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 20px; }
+    .config-panel label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; margin-top: 10px; }
+    .config-panel label:first-child { margin-top: 0; }
+    .config-panel input { width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
+    .user-info { font-size: 12px; color: var(--text-muted); }
+    .param-bar { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+    .param-bar label { font-size: 12px; color: var(--text-muted); }
+    .param-bar select, .param-bar input[type="text"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; }
+    .param-bar input[type="text"] { width: 200px; }
+    .param-group { display: flex; align-items: center; gap: 6px; }
+    .tiles-container { display: flex; flex-wrap: wrap; gap: 12px; }
+    .tile { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px; min-width: 150px; flex: 1; }
+    .tile-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .tile-value { font-size: 28px; font-weight: 600; color: #e0e0e0; }
+    .tile-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .big-number { font-size: 48px; font-weight: 700; color: #e0e0e0; }
+    .big-number-label { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+    .threshold-green { color: #107c10; }
+    .threshold-yellow { color: #ff8c00; }
+    .threshold-orange { color: #d83b01; }
+    .threshold-red { color: #f48771; }
+    #items { display: flex; flex-wrap: wrap; gap: 16px; }
+    .workbook-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 16px; width: 100%; min-width: 0; box-sizing: border-box; }
+    .workbook-item h1, .workbook-item h2, .workbook-item h3 { color: #e0e0e0; }
+    .workbook-item h1 { font-size: 22px; margin-bottom: 8px; }
+    .workbook-item h2 { font-size: 17px; margin-bottom: 6px; }
+    .workbook-item p { line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 8px 12px; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: 600; }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+    .chart-container { position: relative; height: 300px; }
+    .chart-size-0 { height: 400px; }
+    .chart-size-1 { height: 300px; }
+    .chart-size-2 { height: 250px; }
+    .chart-size-3 { height: 200px; }
+    .chart-size-4 { height: 150px; }
+    .loading { color: var(--text-muted); font-size: 13px; font-style: italic; }
+    .error { color: #f48771; font-size: 13px; }
+    .query-toggle { font-size: 11px; color: var(--text-muted); cursor: pointer; margin-top: 8px; }
+    .query-toggle:hover { color: var(--text); }
+    .query-text { display: none; margin-top: 8px; padding: 8px; background: var(--bg); border-radius: 4px; font-family: monospace; font-size: 11px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+    #drop-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 40px; text-align: center; color: var(--text-muted); margin-bottom: 20px; cursor: pointer; }
+    #drop-zone.dragover { border-color: var(--accent); color: var(--accent); }
+    #workbook-container { display: none; }
+    .status-bar { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Azure Workbook Visualizer</h1>
+  <span id="user-info" class="user-info"></span>
+</div>
+
+<div class="config-panel" id="config-panel">
+  <label>Application Insights / Log Analytics Resource ID</label>
+  <input id="resource-id" placeholder="/subscriptions/.../resourceGroups/.../providers/microsoft.insights/components/..." />
+  <span id="config-status" class="status-bar" style="margin-top: 8px; display: inline-block;"></span>
+</div>
+
+<div id="drop-zone">
+  <p>Drop a workbook JSON file here, or click to select</p>
+  <input type="file" id="file-input" accept=".json" style="display:none" />
+</div>
+
+<div id="workbook-container">
+  <div id="param-bar" class="param-bar" style="display:none;"></div>
+  <div id="status-bar" class="status-bar"></div>
+  <div id="items"></div>
+</div>
+
+<script type="module" src="/bundle.js"></script>
+</body>
+</html>
