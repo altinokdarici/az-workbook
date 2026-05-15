@@ -7,6 +7,12 @@
   },
   "main": "./src/cli.js",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/altinokdarici/az-workbook.git"
+  },
+  "homepage": "https://github.com/altinokdarici/az-workbook#readme",
+  "author": "Altinok Darici",
   "files": [
     "src/cli.js",
     "dist",
