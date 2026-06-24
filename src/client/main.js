@@ -467,6 +467,28 @@ function renderText(container, columns, rows, textSettings) {
   }
 }
 
+// Azure Monitor workbook named series colors → hex.
+const AZURE_COLORS = {
+  blue: '#0078d4', lightblue: '#5ea0ef', darkblue: '#004b87',
+  green: '#107c10', lightgreen: '#6bb700', greenbright: '#5db300',
+  red: '#e81123', redbright: '#e81123', darkred: '#a4262c',
+  orange: '#ff8c00', orangebright: '#f7630c',
+  yellow: '#fce100', gold: '#c19c00',
+  purple: '#b146c2', magenta: '#e3008c', pink: '#e3008c',
+  gray: '#a19f9d', grey: '#a19f9d', graybluedark: '#465f7f',
+  brown: '#8e562e', turquoise: '#00b7c3',
+};
+
+function azureColor(name) {
+  return name ? AZURE_COLORS[String(name).toLowerCase()] : undefined;
+}
+
+function isNumericValue(v) {
+  if (typeof v === 'number') return true;
+  if (typeof v === 'string') return v.trim() !== '' && !isNaN(Number(v));
+  return false;
+}
+
 function renderTimeChart(container, idx, columns, rows, settings, size) {
   const wrapper = document.createElement('div');
   wrapper.className = `chart-container chart-size-${typeof size === 'number' ? size : 1}`;
@@ -475,20 +497,67 @@ function renderTimeChart(container, idx, columns, rows, settings, size) {
   container.appendChild(wrapper);
 
   const timeCol = 0;
-  const yColumns = settings?.yAxis || columns.slice(1);
-  const yIndices = yColumns.map(name => columns.indexOf(name)).filter(i => i >= 0);
-  if (yIndices.length === 0) for (let i = 1; i < columns.length; i++) yIndices.push(i);
-
   const colors = ['#0078d4', '#00b7c3', '#8764b8', '#e3008c', '#ff8c00', '#107c10'];
-  const datasets = yIndices.map((colIdx, i) => ({
-    label: columns[colIdx],
-    data: rows.map(r => ({ x: new Date(r[timeCol]), y: r[colIdx] })),
-    borderColor: colors[i % colors.length],
-    backgroundColor: colors[i % colors.length] + '20',
-    fill: false,
-    tension: 0.3,
-    pointRadius: 3,
-  }));
+
+  // Classify the non-time columns into numeric (value) vs string (dimension) columns.
+  const otherCols = columns.map((_, i) => i).filter(i => i !== timeCol);
+  const numericCols = otherCols.filter(i =>
+    rows.some(r => r[i] != null) && rows.every(r => r[i] == null || isNumericValue(r[i])));
+  const stringCols = otherCols.filter(i => !numericCols.includes(i));
+
+  let datasets;
+  // Long/tall format: one numeric value column + ≥1 string dimension column
+  // (e.g. `createdAt | Verdict | Share %`). Azure pivots on the dimension to
+  // draw one line per distinct value; we do the same instead of plotting every
+  // row as a single zigzagging series.
+  if (numericCols.length === 1 && stringCols.length >= 1) {
+    const valueCol = numericCols[0];
+    const seriesMap = new Map();
+    rows.forEach(r => {
+      const key = stringCols.map(i => String(r[i] ?? '')).join(' / ');
+      if (!seriesMap.has(key)) seriesMap.set(key, []);
+      seriesMap.get(key).push({ x: new Date(r[timeCol]), y: r[valueCol] });
+    });
+
+    const labelSettings = settings?.seriesLabelSettings || [];
+    const orderOf = name => {
+      const i = labelSettings.findIndex(s => s.seriesName === name);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    const seriesNames = [...seriesMap.keys()].sort((a, b) => orderOf(a) - orderOf(b));
+
+    datasets = seriesNames.map((name, i) => {
+      const ls = labelSettings.find(s => s.seriesName === name);
+      const color = azureColor(ls?.color) || colors[i % colors.length];
+      const data = seriesMap.get(name);
+      return {
+        label: name,
+        data,
+        borderColor: color,
+        backgroundColor: color + '20',
+        fill: false,
+        tension: 0.3,
+        pointRadius: data.length > 40 ? 0 : 2,
+      };
+    });
+  } else {
+    // Wide format: each numeric column is its own series.
+    const yColumns = settings?.yAxis || numericCols.map(i => columns[i]);
+    let yIndices = yColumns.map(name => columns.indexOf(name)).filter(i => i >= 0);
+    if (yIndices.length === 0) yIndices = numericCols.slice();
+    datasets = yIndices.map((colIdx, i) => {
+      const data = rows.map(r => ({ x: new Date(r[timeCol]), y: r[colIdx] }));
+      return {
+        label: columns[colIdx],
+        data,
+        borderColor: colors[i % colors.length],
+        backgroundColor: colors[i % colors.length] + '20',
+        fill: false,
+        tension: 0.3,
+        pointRadius: data.length > 40 ? 0 : 3,
+      };
+    });
+  }
 
   charts[idx] = new Chart(canvas, {
     type: 'line',
@@ -498,7 +567,7 @@ function renderTimeChart(container, idx, columns, rows, settings, size) {
       maintainAspectRatio: false,
       scales: {
         x: { type: 'time', time: { unit: 'week', tooltipFormat: 'MMM d, yyyy', displayFormats: { week: 'MMM d', day: 'MMM d' } }, grid: { color: '#3c3c3c' }, ticks: { color: '#888', maxRotation: 45 } },
-        y: { min: settings?.ySettings?.min, grid: { color: '#3c3c3c' }, ticks: { color: '#888' } }
+        y: { min: settings?.ySettings?.min, max: settings?.ySettings?.max, grid: { color: '#3c3c3c' }, ticks: { color: '#888' } }
       },
       plugins: { legend: { labels: { color: '#ccc' } } }
     }
