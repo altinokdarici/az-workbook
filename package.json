@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "description": "Local CLI to preview Azure Workbook JSON files in the browser with live reload. Uses your local 'az' CLI for auth. Unofficial.",
   "bin": {
-    "az-workbook": "./src/cli.js"
+    "az-workbook": "src/cli.js"
   },
   "main": "./src/cli.js",
   "type": "module",
